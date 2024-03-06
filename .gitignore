@@ -1,0 +1,9 @@
+test*
+.conda*
+*.bak
+*.dat
+*.dir
+*_v*.*
+*copy*
+*.gguf
+backup_*

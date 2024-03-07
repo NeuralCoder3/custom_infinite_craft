@@ -71,6 +71,7 @@ flower + pikachu = petal pokmon
 <!-- 
 find examples -type f -printf '<img src="examples/%f" width=50 height=50 />\n' 
 -->
+<p float="left">
 <img src="examples/evolution.jpg" width=100 height=100 />
 <img src="examples/firefighter_squirrel.jpg" width=100 height=100 />
 <img src="examples/oceanic_masses.jpg" width=100 height=100 />
@@ -127,3 +128,4 @@ find examples -type f -printf '<img src="examples/%f" width=50 height=50 />\n'
 <img src="examples/life.jpg" width=100 height=100 />
 <img src="examples/bodysofwater.jpg" width=100 height=100 />
 <img src="examples/squirtle.jpg" width=100 height=100 />
+</p>

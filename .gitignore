@@ -4,7 +4,8 @@ test*
 *copy*
 backup_*
 *.png
-
+old
+__pycache__
 
 *.gguf
 

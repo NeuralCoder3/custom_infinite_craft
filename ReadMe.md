@@ -8,10 +8,11 @@
 - [x] Create fancy icons based on Stable-Diffusion
 - [ ] A website to play with the combinations
     - [ ] a tree/graph to keep track of your combinations
+- [ ] Export client-only website
 
 ## Explanation
 
-Prompts and Explanation
+Prompts, Models, and Explanation
 
 ## APIs
 

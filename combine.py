@@ -45,8 +45,28 @@ combinations = shelve.open(combinations_file)
 
 def sanitize(element):
     element = element.lower()
-    element = element.replace("_"," ")
     allowed = "abcdefghijklmnopqrstuvwxyz- 0123456789"
+    substitute = [
+        ("_"," "),
+        ("ä","ae"),
+        ("ö","oe"),
+        ("ü","ue"),
+        ("ß","ss"),
+        ("é","e"),
+        ("è","e"),
+        ("ê","e"),
+        ("à","a"),
+        ("â","a"),
+        ("ô","o"),
+        ("û","u"),
+        ("î","i"),
+        ("ï","i"),
+        ("ç","c"),
+        ("œ","oe"),
+        ("æ","ae"),
+    ]
+    for a,b in substitute:
+        element = element.replace(a,b)
     element = "".join([c for c in element if c in allowed])
     element = element.strip()
     return element
@@ -67,47 +87,110 @@ def get_image(element, generate=True, debug=False):
     image.save(path)
     return path
 
-def combine(element1,element2, generate=True, image=True, debug=False):
-    element1, element2 = sorted([sanitize(element) for element in [element1,element2]])
+def lookup(element1,element2):
     tuple = f"[{element1}]_[{element2}]"
-    generate_image = generate and image
-    if tuple in combinations:
-        path = get_image(combinations[tuple], generate=generate_image)
-        return combinations[tuple], path
-    if not generate:
+    if tuple not in combinations:
         return None, None
+    res = combinations[tuple]
+    if isinstance(res, str):
+        combined = res
+        annotations = None
+    else:
+        combined = res[0]
+        annotations = res[1]
+    return combined, annotations
+
+def combine(element1,element2, generate=True, image=True, debug=False, annotations=None):
+    """Combine two elements into a new element
+
+    Args:
+        element1 (str): First word to combine
+        element2 (str): Second word to combine
+        generate (bool, optional): Generate a new combination if not found. Defaults to True.
+        image (bool, optional): Generate an image if none is present (and generate is set). Defaults to True.
+        debug (bool, optional): Print debug information. Defaults to False.
+        annotations (dict, optional): Annotations for the generation (e.g. weaker model). Defaults to None.
+
+    Returns:
+        str: Combined word
+        str: Path to image
+        bool: True if the word was newly generated
+    """
+    element1, element2 = sorted([sanitize(element) for element in [element1,element2]])
+    
+    generate_image = generate and image
+    combined, _ = lookup(element1,element2)
+    if combined is not None:
+        path = get_image(combined, generate=generate_image)
+        return combined, path, False
+    if not generate:
+        return None, None, False
         
     if debug:
         print(f"Combining {element1} and {element2}")
-    response = llm.create_chat_completion(
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"\"{element1}\" + \"{element2}\" = ?"
-            },
-        ],
-        max_tokens=32,
-        stop=["</s>", "\n"],
-    )
-    
-    combined = response["choices"][0]["message"]["content"]
-    # extract from quotes
-    combined = combined.split('"')[1]
-    combined = sanitize(combined)
-    
-    combinations[tuple] = combined
-    combinations.sync()
+        
+    try:
+        response = llm.create_chat_completion(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": f"\"{element1}\" + \"{element2}\" = ?"
+                },
+            ],
+            max_tokens=32,
+            stop=["</s>", "\n"],
+        )
+        
+        combined = response["choices"][0]["message"]["content"]
+        # extract from quotes
+        if '"' in combined:
+            combined = combined.split('"')[1]
+        else:
+            combined = combined.strip().split(" ")[0]
+        combined = sanitize(combined)
+        
+        combinations[tuple] = combined
+        combinations.sync()
+    except Exception as e:
+        print(f"Error combining {element1} and {element2}: {e}")
+        print("Response:",response)
+        return None, None, False
     
     if debug:
         print(f"Result: {combined}")
     
     path = get_image(combined, generate=generate_image, debug=debug)
-    return combined, path
+    return combined, path, True
 
 
 
+# combine every word with every earlier word
+queue = ["fire", "water", "earth", "air"]
+found = set()
+it = 0
+while True:
+    it += 1
+    if len(queue) == 0:
+        print("Queue empty")
+        break
+    word = queue.pop(0)
+    newly_found = []
+    found.add(word)
+    for element in found:
+        # print(f"{word} + {element} = ", end="", flush=True)
+        print(f"Generating {word} + {element}...")
+        combined, path, new = combine(word,element, generate=True, image=True, debug=False)
+        new_word = combined not in found
+        # twice the start for the image generation overwrite
+        print(f"{word} + {element} = {combined}{' (new)' if new else ''}")
+        if new_word:
+            newly_found.append(combined)
 
+    found.update(newly_found)
+    queue.extend(newly_found)
+
+sys.exit(0)
 
 
 
@@ -139,7 +222,7 @@ for element1, element2 in [
 
 print("Starting server...")
 PORT = 5000
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
@@ -149,23 +232,33 @@ def combine_route_post():
     data = request.json
     element1 = data["element1"]
     element2 = data["element2"]
-    combined = combine(element1,element2, generate=True, image=True, debug=True)
-    return jsonify({"combined":combined})
-
-@app.route('/combine_get', methods=['GET'])
-def combine_route_get():
-    # e.g. http://localhost:5000/combine?element1=fire&element2=water
-    # warning: long generation time might time out
-    # generally use POST instead
-    element1 = request.args.get('element1')
-    element2 = request.args.get('element2')
-    generate = request.args.get('generate')
-    if generate is None:
-        generate = False
-    combined = combine(element1,element2, generate=generate)
+    generate_image = data.get("generate_image")
+    if generate_image is None:
+        generate_image = True
+    combined, image, new = combine(element1,element2, generate=True, image=generate_image, debug=True)
     if combined is None:
         return jsonify({"error":"combination not found"})
-    return jsonify({"combined":combined})
+    return jsonify({"combined":combined, "image":image, "new":new})
+
+# @app.route('/combine_get', methods=['GET'])
+# def combine_route_get():
+#     # e.g. http://localhost:5000/combine?element1=fire&element2=water
+#     # warning: long generation time might time out
+#     # generally use POST instead
+#     element1 = request.args.get('element1')
+#     element2 = request.args.get('element2')
+#     generate = request.args.get('generate')
+#     if generate is None:
+#         generate = False
+#     combined, image, new = combine(element1,element2, generate=generate)
+#     if combined is None:
+#         return jsonify({"error":"combination not found"})
+#     return jsonify({"combined":combined})
+
+# expose the image folder
+@app.route('/images/<path:path>')
+def send_image(path):
+    return send_from_directory(image_folder, path)
 
 # for testing (debug mode)
 app.run(port=PORT)

@@ -1,5 +1,6 @@
 import networks
 
+# generate_images = True
 generate_images = False
 networks.init(load_image=generate_images)
 

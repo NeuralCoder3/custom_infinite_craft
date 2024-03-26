@@ -1,7 +1,8 @@
 import os
 
 path = "."
-model = "mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf"
+# model = "mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf"
+model = "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 system_prompt = """
 You combine words according to their meaning. 
 Avoid having the result be the same as one of the inputs. 

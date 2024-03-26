@@ -6,8 +6,9 @@
 
 - [x] Create high-quality words based on state-of-the-art LLMs (e.g. Mixtral)
 - [x] Create fancy icons based on Stable-Diffusion
-- [ ] A website to play with the combinations
+- [x] A website to play with the combinations
     - [ ] a tree/graph to keep track of your combinations
+    - [ ] allow for subtractive combinations
 - [ ] Export client-only website
 
 ## Explanation
@@ -21,6 +22,11 @@ Prompts, Models, and Explanation
 - Infinite Craft: https://neal.fun/infinite-craft/
 - GPT Combination Guesser: https://github.com/YuraSuper2048/infinite-craft-gpt-server
 - Infinite Craft Related Repos: https://github.com/search?q=infinite+craft&type=repositories (mostly bruteforcer or enumerators)
+    - GPT-4 API + Dall-e (realistic images): https://github.com/sshh12/llm_alchemy
+    - with oolama: https://github.com/Fus3n/infinite-sides?tab=readme-ov-file
+    - docker+postgres: https://github.com/joeyagreco/infinite-craft-architecture
+    - chatgpt 3.5: https://github.com/dekdao/infinite-craft-nextjs
+    - mistral+website: https://github.com/bufferhead-code/opencraft
 
 
 ## Examples

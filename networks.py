@@ -11,7 +11,7 @@ import sys
 llm = None
 image_pipe = None
 
-def init(load_llm=True, load_image=True):
+def init(load_llm=True, load_image=True, compile_image=True):
     global image_pipe
     global llm
 
@@ -22,14 +22,49 @@ def init(load_llm=True, load_image=True):
             print(f"Model file not found at {config.model_path}. Please download the model file first.")
             sys.exit(1)
         llm = Llama(model_path=config.model_path, chat_format="llama-2",verbose=False) 
+        # llm = Llama(model_path=config.model_path, chat_format="llama-2",verbose=False, n_gpu_layers=200)
     if load_image:
         print("Loading SDXL...")
-        image_pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float32, variant="fp16")
-        # image_pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
-        # image_pipe.enable_attention_slicing()
+        # https://huggingface.co/docs/diffusers/main/en/using-diffusers/sdxl_turbo
+        from optimum.intel.openvino.modeling_diffusion import OVStableDiffusionPipeline
+
+        image_pipe = OVStableDiffusionPipeline.from_pretrained(
+            "rupeshs/sd-turbo-openvino",
+            ov_config={"CACHE_DIR": ""},
+        )
+        
+        # improve speed using taesd
+        from diffusers import AutoencoderTiny
+        image_pipe.vae = AutoencoderTiny.from_pretrained("madebyollin/taesd", torch_dtype=torch.float16)
+        
+        # image_pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float32, variant="fp16")
+        # image_pipe.upcast_vae()
+        
+        # # gpu
+        # # image_pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16")
+        # # image_pipe.enable_attention_slicing()
         # image_pipe.to("cuda")
         
+        
+        # # image_pipe.unet = torch.compile(image_pipe.unet, mode="reduce-overhead", fullgraph=True)
+        # if compile_image:
+        # #     # real work is delayed until the first call
+        #     image_pipe.unet = torch.compile(image_pipe.unet, mode="max-autotune", fullgraph=True)
+            
+def generate_image(prompt):
+    if image_pipe is None:
+        return None
+    # return image_pipe(prompt=prompt, negative_prompt=config.image_negative_prompt, num_inference_steps=1, guidance_scale=0.0).images[0]
+    return image_pipe(
+            prompt=prompt,
+            width=512,
+            height=512,
+            num_inference_steps=1,
+            guidance_scale=1.0,
+        ).images[0]
+        
 def get_image(element, generate=True, debug=False):
+    element = util.sanitize(element)
     filename = element.replace(" ","_")
     for ending in config.endings:
         path = os.path.join(config.image_folder,f"{filename}.{ending}")
@@ -41,12 +76,15 @@ def get_image(element, generate=True, debug=False):
     path = os.path.join(config.image_folder,f"{filename}.{config.endings[0]}")
     if debug:
         print(f"Generating image for {element}")
-    image = image_pipe(prompt=prompt, negative_prompt=config.image_negative_prompt, num_inference_steps=1, guidance_scale=0.0).images[0]
+    image = generate_image(prompt)
+    if image is None:
+        return None
     image.save(path)
     return path
+    # return filename
 
 
-def combine(element1,element2, generate=True, image=True, debug=False, annotations=None):
+def combine(element1,element2, generate=True, image=True, debug=False, annotations=None, ordered=False, op="+"):
     """Combine two elements into a new element
 
     Args:
@@ -62,10 +100,14 @@ def combine(element1,element2, generate=True, image=True, debug=False, annotatio
         str: Path to image
         bool: True if the word was newly generated
     """
-    element1, element2 = sorted([util.sanitize(element) for element in [element1,element2]])
+    element1 = util.sanitize(element1)
+    element2 = util.sanitize(element2)
+    ordered = not (op=="+")
+    if not ordered:
+        element1, element2 = sorted([element1,element2])
     
     generate_image = generate and image
-    combined, _ = util.lookup(element1,element2)
+    combined, _ = util.lookup(element1,element2, op)
     if combined is not None:
         path = get_image(combined, generate=generate_image)
         return combined, path, False
@@ -73,7 +115,7 @@ def combine(element1,element2, generate=True, image=True, debug=False, annotatio
         return None, None, False
         
     if debug:
-        print(f"Combining {element1} and {element2}")
+        print(f"Combining {element1} and {element2} using {op}")
         
     try:
         response = llm.create_chat_completion(
@@ -81,7 +123,7 @@ def combine(element1,element2, generate=True, image=True, debug=False, annotatio
                 {"role": "system", "content": config.system_prompt},
                 {
                     "role": "user",
-                    "content": f"\"{element1}\" + \"{element2}\" = ?"
+                    "content": f"\"{element1}\" {op} \"{element2}\" = ?"
                 },
             ],
             max_tokens=32,
@@ -96,7 +138,7 @@ def combine(element1,element2, generate=True, image=True, debug=False, annotatio
             combined = combined.strip().split(" ")[0]
         combined = util.sanitize(combined)
         
-        util.insert(element1,element2,combined,None)
+        util.insert(element1,element2,combined,op,None)
     except Exception as e:
         print(f"Error combining {element1} and {element2}: {e}")
         print("Response:",response)

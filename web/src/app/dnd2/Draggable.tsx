@@ -7,6 +7,7 @@ const CustomStyle = {
   // display: "flex",
   width: "120px",
   // height: "140px",
+  minHeight: "140px",
   backgroundColor: "#e8e8a2",
 };
 
@@ -52,6 +53,7 @@ export function Draggable({ id, note, styles }: DraggableProps) {
       below the image on a new line
        */}
       {image}
+      {/* <div>{text} ({id})</div> */}
       <div>{text}</div>
     </div>
   );

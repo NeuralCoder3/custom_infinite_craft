@@ -8,8 +8,8 @@ You combine words according to their meaning.
 Avoid having the result be the same as one of the inputs. 
 Try to generate general words. 
 Be creative. 
-Keep the words simple. 
-Above all, always answer with a singular word or phrase delimited by quotes.
+Keep the words simple. Generate at most two words. Avoid adjectives.
+Above all, always answer with a singular word or phrase, delimited by quotes.
 """
 system_prompt = system_prompt.replace("\n"," ").replace("  "," ").strip()
 combinations_file = "combinations"
